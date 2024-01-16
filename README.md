@@ -32,3 +32,26 @@
 | ------------ | --------------------- |
 | Instance     | Instance              |
 | Enable value | Input or output value |
+
+## Constraints
+
+* Logic gates satisfied
+  
+  ```
+  (i_e_g * e_g, g, l_val, r_val, o_val) 
+      ∈ (i_e_g_def, g_def, l_def, r_def, o_def);
+  ```
+
+* Wire assignments satisfied
+  
+  ```
+  (i_e_g * e_g, l_idx, l_val) ∈ (i_e_w, idx, val);
+  (i_e_g * e_g, r_idx, r_val) ∈ (i_e_w, idx, val);
+  (i_e_g * e_g, o_idx, o_val) ∈ (i_e_w, idx, val);
+  ```
+
+* Input/output constraints satisfied
+  
+  ```
+  e_i_o * (val - i_o_val) == 0;
+  ```
