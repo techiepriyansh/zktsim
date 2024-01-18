@@ -259,18 +259,84 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
 }
 
 pub fn run_zktsim(ckt: BooleanCircuit) {
-    use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp;
+    use halo2_proofs::{
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, ProvingKey},
+        poly::{
+            kzg::{
+                commitment::{KZGCommitmentScheme, ParamsKZG},
+                multiopen::{ProverGWC, VerifierGWC},
+                strategy::SingleStrategy,
+            },
+            Rotation,
+        },
+        transcript::{
+            Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+        },
+        SerdeFormat,
+    };
+    use halo2curves::bn256::{Bn256, Fr, G1Affine};
+    use rand_core::OsRng;
 
-    let k = 8;
-    const G: usize = 16;
-    const W: usize = 16;
+    const k: u32 = 15;
+    const G: usize = 1 << (k-1);
+    const W: usize = 1 << (k-1);
 
-    let zktsim_circuit = ZktSimCircuit::<Fp, G, W> {
+    let circuit = ZktSimCircuit::<Fr, G, W> {
         boolean_circuit: ckt,
         _marker: PhantomData,
     };
 
-    let prover = MockProver::run(k, &zktsim_circuit, vec![]).unwrap();
-    prover.assert_satisfied();
+    println!("Creating parameters...");
+
+    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+
+    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+
+    let instances: &[&[Fr]] = &[];
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+
+    println!("Generating proof...");
+
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
+        _,
+    >(
+        &params,
+        &pk,
+        &[circuit],
+        &[instances],
+        OsRng,
+        &mut transcript,
+    )
+    .expect("prover should not fail");
+    let proof = transcript.finalize();
+
+    println!("Proof generated!");
+
+    let strategy = SingleStrategy::new(&params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+
+    println!("Verifying proof...");
+
+    assert!(verify_proof::<
+        KZGCommitmentScheme<Bn256>,
+        VerifierGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+        SingleStrategy<'_, Bn256>,
+    >(
+        &params,
+        pk.get_vk(),
+        strategy,
+        &[instances],
+        &mut transcript
+    )
+    .is_ok());
+
+    println!("Proof verified!");
 }
