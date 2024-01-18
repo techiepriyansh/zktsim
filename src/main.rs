@@ -14,6 +14,4 @@ fn main() {
     };
 
     run_zktsim(ckt);
-
-    println!("Works!");
 }

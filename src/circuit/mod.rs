@@ -259,12 +259,15 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
 }
 
 pub fn run_zktsim(ckt: BooleanCircuit) {
-    use halo2_proofs::dev::MockProver;
+    use halo2_proofs::dev::{
+        cost_model::{from_circuit_to_model_circuit, CommitmentScheme},
+        MockProver,
+    };
     use halo2curves::pasta::Fp;
 
-    let k = 8;
-    const G: usize = 16;
-    const W: usize = 16;
+    let k = 14;
+    const G: usize = 128;
+    const W: usize = 128;
 
     let zktsim_circuit = ZktSimCircuit::<Fp, G, W> {
         boolean_circuit: ckt,
@@ -273,4 +276,17 @@ pub fn run_zktsim(ckt: BooleanCircuit) {
 
     let prover = MockProver::run(k, &zktsim_circuit, vec![]).unwrap();
     prover.assert_satisfied();
+    println!("Constraints satisfied!");
+
+    let model = from_circuit_to_model_circuit::<_, _, 56, 56>(
+        k,
+        &zktsim_circuit,
+        vec![],
+        CommitmentScheme::KZGGWC,
+    );
+
+    println!(
+        "Cost of circuit: \n{}",
+        serde_json::to_string_pretty(&model).unwrap()
+    );
 }
