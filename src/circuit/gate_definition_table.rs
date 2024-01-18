@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use halo2_proofs::{
-    circuit::{Layouter, Value, Region},
-    plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
+    circuit::{Layouter, Region, Value},
+    plonk::{Column, ConstraintSystem, Error, Fixed},
 };
 
 use halo2curves::ff::PrimeField;

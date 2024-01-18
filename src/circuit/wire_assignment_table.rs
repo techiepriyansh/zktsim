@@ -8,21 +8,22 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 
 #[derive(Debug, Clone)]
-pub(super) struct WireAssignmentTableConfig<F: PrimeField> {
+pub(super) struct WireAssignmentTableConfig<F: PrimeField, const W: usize> {
     pub(super) internal_enable_wire: Column<Fixed>,
     pub(super) idx: Column<Fixed>,
     pub(super) val: Column<Advice>,
 
-    pub(super) size: usize,
-
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> WireAssignmentTableConfig<F> {
+pub(super) struct WireAssignmentTableAdvice {
+    pub(super) val: Column<Advice>,
+}
+
+impl<F: PrimeField, const W: usize> WireAssignmentTableConfig<F, W> {
     pub(super) fn configure(
         meta: &mut ConstraintSystem<F>,
-        val: Column<Advice>,
-        size: usize,
+        advice: WireAssignmentTableAdvice,
     ) -> Self {
         let internal_enable_wire = meta.fixed_column();
         let idx = meta.fixed_column();
@@ -30,18 +31,17 @@ impl<F: PrimeField> WireAssignmentTableConfig<F> {
         Self {
             internal_enable_wire,
             idx,
-            val,
-            size,
+            val: advice.val,
             _marker: PhantomData,
         }
     }
 
-    pub(super) fn load(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
+    pub(super) fn load_fixed(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
         layouter.assign_region(
-            || "load wire-assignment table",
+            || "load wire-assignment table fixed part",
             |mut region| {
                 let mut offset = 0;
-                for value in 0..self.size {
+                for value in 0..W {
                     region.assign_fixed(
                         || format!("i_e_w[{}]", offset),
                         self.internal_enable_wire,
@@ -70,12 +70,6 @@ impl<F: PrimeField> WireAssignmentTableConfig<F> {
                     offset,
                     || Value::known(F::ZERO),
                 )?;
-                region.assign_advice(
-                    || format!("val[{}]", offset),
-                    self.val,
-                    offset,
-                    || Value::known(F::ZERO),
-                )?; // does this advice assignment need to be here?
 
                 Ok(())
             },
