@@ -1,0 +1,57 @@
+inputs
+9 a[0]
+10 a[1]
+11 a[2]
+12 a[3]
+13 a[4]
+14 a[5]
+15 b[0]
+16 b[1]
+17 b[2]
+18 b[3]
+19 b[4]
+20 b[5]
+21 c_in[0]
+
+outputs
+2 sum[0]
+3 sum[1]
+4 sum[2]
+5 sum[3]
+6 sum[4]
+7 sum[5]
+8 c_out[0]
+
+wirings
+nand 20 14 22
+xor 20 14 23
+nand 19 13 24
+or 19 13 25
+nand 18 12 26
+xor 18 12 27
+nand 17 11 28
+or 17 11 29
+nand 16 10 30
+xor 16 10 31
+nand 15 9 32
+xor 15 9 33
+nand 21 33 34
+nand 32 34 35
+nand 31 35 36
+nand 30 36 37
+nand 29 37 38
+nand 28 38 39
+nand 27 39 40
+nand 26 40 41
+nand 25 41 42
+nand 24 42 43
+nand 23 43 44
+nand 22 44 8
+xor 21 33 2
+xor 31 35 3
+nand 28 29 45
+xnor 37 45 4
+xor 27 39 5
+nand 24 25 46
+xnor 41 46 6
+xor 23 43 7
