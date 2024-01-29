@@ -42,47 +42,54 @@ impl<F: PrimeField> GateDefinitionTableConfig<F> {
             |mut region| {
                 let mut offset = 0;
 
-                // AND gate
-                let and_gate = 0;
-                self.declare_gate_io(&mut region, &mut offset, and_gate, 0, 0, 0)?;
-                self.declare_gate_io(&mut region, &mut offset, and_gate, 0, 1, 0)?;
-                self.declare_gate_io(&mut region, &mut offset, and_gate, 1, 0, 0)?;
-                self.declare_gate_io(&mut region, &mut offset, and_gate, 1, 1, 1)?;
-
-                // OR gate
-                let or_gate = 1;
-                self.declare_gate_io(&mut region, &mut offset, or_gate, 0, 0, 0)?;
-                self.declare_gate_io(&mut region, &mut offset, or_gate, 0, 1, 1)?;
-                self.declare_gate_io(&mut region, &mut offset, or_gate, 1, 0, 1)?;
-                self.declare_gate_io(&mut region, &mut offset, or_gate, 1, 1, 1)?;
-
                 // NOT gate (right input is ignored; set it same as left input)
-                let not_gate = 2;
+                let not_gate = 0;
                 self.declare_gate_io(&mut region, &mut offset, not_gate, 0, 0, 1)?;
                 self.declare_gate_io(&mut region, &mut offset, not_gate, 0, 1, 1)?;
                 self.declare_gate_io(&mut region, &mut offset, not_gate, 1, 0, 0)?;
                 self.declare_gate_io(&mut region, &mut offset, not_gate, 1, 1, 0)?;
 
-                // XOR gate
-                let xor_gate = 3;
-                self.declare_gate_io(&mut region, &mut offset, xor_gate, 0, 0, 0)?;
-                self.declare_gate_io(&mut region, &mut offset, xor_gate, 0, 1, 1)?;
-                self.declare_gate_io(&mut region, &mut offset, xor_gate, 1, 0, 1)?;
-                self.declare_gate_io(&mut region, &mut offset, xor_gate, 1, 1, 0)?;
+                // AND gate
+                let and_gate = 1;
+                self.declare_gate_io(&mut region, &mut offset, and_gate, 0, 0, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, and_gate, 0, 1, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, and_gate, 1, 0, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, and_gate, 1, 1, 1)?;
 
                 // NAND gate
-                let nand_gate = 4;
+                let nand_gate = 2;
                 self.declare_gate_io(&mut region, &mut offset, nand_gate, 0, 0, 1)?;
                 self.declare_gate_io(&mut region, &mut offset, nand_gate, 0, 1, 1)?;
                 self.declare_gate_io(&mut region, &mut offset, nand_gate, 1, 0, 1)?;
                 self.declare_gate_io(&mut region, &mut offset, nand_gate, 1, 1, 0)?;
 
+                // OR gate
+                let or_gate = 3;
+                self.declare_gate_io(&mut region, &mut offset, or_gate, 0, 0, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, or_gate, 0, 1, 1)?;
+                self.declare_gate_io(&mut region, &mut offset, or_gate, 1, 0, 1)?;
+                self.declare_gate_io(&mut region, &mut offset, or_gate, 1, 1, 1)?;
+
                 // NOR gate
-                let nor_gate = 5;
+                let nor_gate = 4;
                 self.declare_gate_io(&mut region, &mut offset, nor_gate, 0, 0, 1)?;
                 self.declare_gate_io(&mut region, &mut offset, nor_gate, 0, 1, 0)?;
                 self.declare_gate_io(&mut region, &mut offset, nor_gate, 1, 0, 0)?;
                 self.declare_gate_io(&mut region, &mut offset, nor_gate, 1, 1, 0)?;
+
+                // XOR gate
+                let xor_gate = 5;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 0, 0, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 0, 1, 1)?;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 1, 0, 1)?;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 1, 1, 0)?;
+
+                // XNOR gate
+                let xor_gate = 6;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 0, 0, 1)?;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 0, 1, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 1, 0, 0)?;
+                self.declare_gate_io(&mut region, &mut offset, xor_gate, 1, 1, 1)?;
 
                 // For when internal_enable_gate_def is disabled
                 self.load_zero_row(&mut region, offset)?;
