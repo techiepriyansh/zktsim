@@ -263,3 +263,87 @@ pub fn run_mock_prover(ckt: BooleanCircuitInstance) {
     let prover = MockProver::run(k, &zktsim_circuit, vec![]).unwrap();
     prover.assert_satisfied();
 }
+
+pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
+    use halo2_proofs::{
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, ProvingKey},
+        poly::{
+            kzg::{
+                commitment::{KZGCommitmentScheme, ParamsKZG},
+                multiopen::{ProverGWC, VerifierGWC},
+                strategy::SingleStrategy,
+            },
+            Rotation,
+        },
+        transcript::{
+            Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+        },
+        SerdeFormat,
+    };
+    use halo2curves::bn256::{Bn256, Fr, G1Affine};
+    use rand_core::OsRng;
+
+    #[allow(non_upper_case_globals)]
+    const k: u32 = 12;
+    const G: usize = 1 << (k - 1);
+    const W: usize = 1 << (k - 1);
+
+    let circuit = ZktSimCircuit::<Fr, G, W> {
+        boolean_circuit_instance: ckt,
+        _marker: PhantomData,
+    };
+
+    println!("Creating parameters...");
+
+    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+
+    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+
+    let instances: &[&[Fr]] = &[];
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+
+    println!("Generating proof...");
+
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
+        _,
+    >(
+        &params,
+        &pk,
+        &[circuit],
+        &[instances],
+        OsRng,
+        &mut transcript,
+    )
+    .expect("prover should not fail");
+    let proof = transcript.finalize();
+
+    println!("Proof generated!");
+
+    let strategy = SingleStrategy::new(&params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+
+    println!("Verifying proof...");
+
+    assert!(verify_proof::<
+        KZGCommitmentScheme<Bn256>,
+        VerifierGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+        SingleStrategy<'_, Bn256>,
+    >(
+        &params,
+        pk.get_vk(),
+        strategy,
+        &[instances],
+        &mut transcript
+    )
+    .is_ok());
+
+    println!("Proof verified!");
+}

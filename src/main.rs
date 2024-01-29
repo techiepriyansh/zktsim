@@ -1,5 +1,5 @@
 use zktsim::boolean_circuit::{BooleanCircuit, BooleanCircuitInstance};
-use zktsim::circuit::run_mock_prover;
+use zktsim::circuit::{run_mock_prover, run_prover_kzg};
 
 fn u64_to_bits_le(x: u64, n: usize) -> Vec<bool> {
     let mut v = Vec::new();
@@ -67,7 +67,7 @@ fn test_zktsim_c6288() {
     let p = bits_le_to_u64(&outputs);
     println!("p = {}", p);
 
-    run_mock_prover(inst);
+    run_prover_kzg(inst);
 
     println!("zktsim c6288 works!");
 }
