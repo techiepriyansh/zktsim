@@ -250,9 +250,9 @@ pub fn run_zktsim(ckt: BooleanCircuitInstance) {
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
 
-    let k = 8;
-    const G: usize = 16;
-    const W: usize = 16;
+    let k = 9;
+    const G: usize = 128;
+    const W: usize = 128;
 
     let zktsim_circuit = ZktSimCircuit::<Fp, G, W> {
         boolean_circuit_instance: ckt,

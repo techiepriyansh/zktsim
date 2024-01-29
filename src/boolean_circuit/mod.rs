@@ -3,7 +3,7 @@ use std::{
     io::{BufRead, BufReader, Error, ErrorKind},
 };
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct BooleanCircuitGateIo {
     pub gate: u64,
     pub l_idx: u64,
@@ -19,6 +19,7 @@ pub struct BooleanCircuit {
     pub max_wire_idx: u64,
 }
 
+#[derive(Default, Debug)]
 pub struct BooleanCircuitAssignment {
     pub wires: Vec<bool>,
 }
@@ -141,5 +142,41 @@ impl BooleanCircuit {
             gates,
             max_wire_idx,
         })
+    }
+
+    pub fn eval(&self, inputs: &[bool]) -> BooleanCircuitAssignment {
+        let mut wires = vec![false; (self.max_wire_idx + 1) as usize];
+
+        for (i, input) in inputs.iter().enumerate() {
+            wires[self.inputs[i] as usize] = *input;
+        }
+
+        for gate_io in &self.gates {
+            let l = wires[gate_io.l_idx as usize];
+            let r = wires[gate_io.r_idx as usize];
+            let o = match gate_io.gate {
+                0 => !l,
+                1 => l & r,
+                2 => !(l & r),
+                3 => l | r,
+                4 => !(l | r),
+                5 => l ^ r,
+                6 => !(l ^ r),
+                _ => panic!("invalid gate {}", gate_io.gate),
+            };
+            wires[gate_io.o_idx as usize] = o;
+        }
+
+        BooleanCircuitAssignment { wires }
+    }
+}
+
+impl BooleanCircuitInstance {
+    pub fn from_ckt_and_inputs(ckt: &BooleanCircuit, inputs: &[bool]) -> Self {
+        let assn = ckt.eval(inputs);
+        BooleanCircuitInstance {
+            gates: ckt.gates.clone(),
+            wires: assn.wires,
+        }
     }
 }
