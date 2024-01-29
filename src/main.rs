@@ -1,5 +1,5 @@
 use zktsim::boolean_circuit::{BooleanCircuit, BooleanCircuitInstance};
-use zktsim::circuit::run_zktsim;
+use zktsim::circuit::run_mock_prover;
 
 fn u64_to_bits_le(x: u64, n: usize) -> Vec<bool> {
     let mut v = Vec::new();
@@ -20,6 +20,7 @@ fn bits_le_to_u64(v: &[bool]) -> u64 {
     x
 }
 
+#[allow(dead_code)]
 fn test_zktsim_cla() {
     let ckt = BooleanCircuit::from_netlist("examples/cla_adder_6b.zkt").unwrap();
 
@@ -41,7 +42,7 @@ fn test_zktsim_cla() {
     println!("s = {}", s);
     println!("c_out = {}", c_out);
 
-    run_zktsim(inst);
+    run_mock_prover(inst);
 
     println!("zktsim cla works!");
 }
@@ -49,8 +50,8 @@ fn test_zktsim_cla() {
 fn test_zktsim_c6288() {
     let ckt = BooleanCircuit::from_netlist("examples/c6288.zkt").unwrap();
 
-    let mut a = u64_to_bits_le(11, 16);
-    let mut b = u64_to_bits_le(13, 16);
+    let mut a = u64_to_bits_le(512, 16);
+    let mut b = u64_to_bits_le(2048, 16);
     a.reverse();
     b.reverse();
     let inputs = vec![a, b].concat();
@@ -66,7 +67,7 @@ fn test_zktsim_c6288() {
     let p = bits_le_to_u64(&outputs);
     println!("p = {}", p);
 
-    run_zktsim(inst);
+    run_mock_prover(inst);
 
     println!("zktsim c6288 works!");
 }

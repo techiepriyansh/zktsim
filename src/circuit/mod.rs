@@ -11,7 +11,7 @@ use halo2_proofs::{
 
 use halo2curves::ff::PrimeField;
 
-use crate::boolean_circuit::{BooleanCircuitInstance};
+use crate::boolean_circuit::BooleanCircuitInstance;
 
 mod gate_io_table;
 use gate_io_table::{GateIoTableAdvice, GateIoTableConfig};
@@ -246,13 +246,14 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
     }
 }
 
-pub fn run_zktsim(ckt: BooleanCircuitInstance) {
+pub fn run_mock_prover(ckt: BooleanCircuitInstance) {
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
 
-    let k = 12;
-    const G: usize = 2048;
-    const W: usize = 2048;
+    #[allow(non_upper_case_globals)]
+    const k: u32 = 12;
+    const G: usize = 1 << (k - 1);
+    const W: usize = 1 << (k - 1);
 
     let zktsim_circuit = ZktSimCircuit::<Fp, G, W> {
         boolean_circuit_instance: ckt,
