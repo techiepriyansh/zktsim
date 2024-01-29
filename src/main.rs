@@ -1,8 +1,8 @@
-use zktsim::boolean_circuit::{BooleanCircuit, BooleanCircuitGateIo};
+use zktsim::boolean_circuit::{BooleanCircuit, BooleanCircuitGateIo, BooleanCircuitInstance};
 use zktsim::circuit::run_zktsim;
 
-fn main() {
-    let ckt = BooleanCircuit {
+fn test_zktsim() {
+    let ckt = BooleanCircuitInstance {
         gates: vec![BooleanCircuitGateIo {
             gate: 1,
             l_idx: 0,
@@ -14,5 +14,15 @@ fn main() {
 
     run_zktsim(ckt);
 
-    println!("Works!");
+    println!("zktsim works!");
+}
+
+fn test_parse_boolean_circut() {
+    let ckt = BooleanCircuit::from_netlist("examples/cla_adder_6b.zkt").unwrap();
+    println!("ckt: {:?}", ckt);
+}
+
+fn main() {
+    test_zktsim();
+    test_parse_boolean_circut();
 }

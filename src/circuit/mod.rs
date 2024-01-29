@@ -11,7 +11,7 @@ use halo2_proofs::{
 
 use halo2curves::ff::PrimeField;
 
-use crate::boolean_circuit::BooleanCircuit;
+use crate::boolean_circuit::{BooleanCircuitInstance};
 
 mod gate_io_table;
 use gate_io_table::{GateIoTableAdvice, GateIoTableConfig};
@@ -163,7 +163,7 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
 
 #[derive(Default)]
 struct ZktSimCircuit<F: PrimeField, const G: usize, const W: usize> {
-    boolean_circuit: BooleanCircuit,
+    boolean_circuit_instance: BooleanCircuitInstance,
     _marker: PhantomData<F>,
 }
 
@@ -202,7 +202,7 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
         config.wire_assignment_table.load_fixed(&mut layouter)?;
         config.gate_definition_table.load(&mut layouter)?;
 
-        for wire in self.boolean_circuit.wires.iter() {
+        for wire in self.boolean_circuit_instance.wires.iter() {
             let wire_val = if *wire {
                 Value::known(Assigned::from(F::ONE))
             } else {
@@ -212,10 +212,10 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
         }
         // Check if we need to explicity assign the zero wire in the last row (where internal_enable_wire is zero)?
 
-        for gate_io in self.boolean_circuit.gates.iter() {
+        for gate_io in self.boolean_circuit_instance.gates.iter() {
             let va = |val: u64| Value::known(Assigned::from(F::from(val)));
             let wire_va = |idx: u64| {
-                if self.boolean_circuit.wires[idx as usize] {
+                if self.boolean_circuit_instance.wires[idx as usize] {
                     Value::known(Assigned::from(F::ONE))
                 } else {
                     Value::known(Assigned::from(F::ZERO))
@@ -246,7 +246,7 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
     }
 }
 
-pub fn run_zktsim(ckt: BooleanCircuit) {
+pub fn run_zktsim(ckt: BooleanCircuitInstance) {
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp;
 
@@ -255,7 +255,7 @@ pub fn run_zktsim(ckt: BooleanCircuit) {
     const W: usize = 16;
 
     let zktsim_circuit = ZktSimCircuit::<Fp, G, W> {
-        boolean_circuit: ckt,
+        boolean_circuit_instance: ckt,
         _marker: PhantomData,
     };
 
