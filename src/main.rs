@@ -29,12 +29,13 @@ fn test_zktsim_cla() {
     let c_in = u64_to_bits_le(0, 1);
     let inputs = vec![a, b, c_in].concat();
 
-    let inst = BooleanCircuitInstance::from_ckt_and_inputs(&ckt, &inputs);
+    let inst = BooleanCircuitInstance::from_ckt_and_inputs(ckt, &inputs);
 
-    let outputs = ckt
+    let outputs = inst
+        .ckt
         .outputs
         .iter()
-        .map(|&i| inst.wires[i as usize])
+        .map(|&i| inst.assn.wires[i as usize])
         .collect::<Vec<_>>();
     let s = bits_le_to_u64(&outputs[0..6]);
     let c_out = bits_le_to_u64(&outputs[6..7]);
@@ -56,12 +57,13 @@ fn test_zktsim_c6288() {
     b.reverse();
     let inputs = vec![a, b].concat();
 
-    let inst = BooleanCircuitInstance::from_ckt_and_inputs(&ckt, &inputs);
+    let inst = BooleanCircuitInstance::from_ckt_and_inputs(ckt, &inputs);
 
-    let mut outputs = ckt
+    let mut outputs = inst
+        .ckt
         .outputs
         .iter()
-        .map(|&i| inst.wires[i as usize])
+        .map(|&i| inst.assn.wires[i as usize])
         .collect::<Vec<_>>();
     outputs.reverse();
     let p = bits_le_to_u64(&outputs);

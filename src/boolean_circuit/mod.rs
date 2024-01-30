@@ -11,7 +11,7 @@ pub struct BooleanCircuitGateIo {
     pub o_idx: u64,
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct BooleanCircuit {
     pub inputs: Vec<u64>,
     pub outputs: Vec<u64>,
@@ -19,15 +19,15 @@ pub struct BooleanCircuit {
     pub max_wire_idx: u64,
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct BooleanCircuitAssignment {
     pub wires: Vec<bool>,
 }
 
 #[derive(Default, Debug)]
 pub struct BooleanCircuitInstance {
-    pub gates: Vec<BooleanCircuitGateIo>,
-    pub wires: Vec<bool>,
+    pub ckt: BooleanCircuit,
+    pub assn: BooleanCircuitAssignment,
 }
 
 impl BooleanCircuit {
@@ -172,11 +172,8 @@ impl BooleanCircuit {
 }
 
 impl BooleanCircuitInstance {
-    pub fn from_ckt_and_inputs(ckt: &BooleanCircuit, inputs: &[bool]) -> Self {
+    pub fn from_ckt_and_inputs(ckt: BooleanCircuit, inputs: &[bool]) -> Self {
         let assn = ckt.eval(inputs);
-        BooleanCircuitInstance {
-            gates: ckt.gates.clone(),
-            wires: assn.wires,
-        }
+        BooleanCircuitInstance { ckt, assn }
     }
 }

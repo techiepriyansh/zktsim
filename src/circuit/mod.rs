@@ -22,6 +22,9 @@ use gate_definition_table::GateDefinitionTableConfig;
 mod wire_assignment_table;
 use wire_assignment_table::{WireAssignmentTableAdvice, WireAssignmentTableConfig};
 
+mod expected_io_table;
+use expected_io_table::{ExpectedIoTableConfig, ExpectedIoTableInstance};
+
 #[derive(Debug, Clone)]
 struct ACell<F: PrimeField>(AssignedCell<Assigned<F>, F>);
 
@@ -30,6 +33,7 @@ struct ZktSimConfig<F: PrimeField, const G: usize, const W: usize> {
     gate_io_table: GateIoTableConfig<F, G>,
     wire_assignment_table: WireAssignmentTableConfig<F, W>,
     gate_definition_table: GateDefinitionTableConfig<F>,
+    expected_io_table: ExpectedIoTableConfig<F>,
 }
 
 impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
@@ -37,10 +41,12 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
         meta: &mut ConstraintSystem<F>,
         gate_io_table_advice: GateIoTableAdvice,
         wire_assignment_table_advice: WireAssignmentTableAdvice,
+        expected_io_table_instance: ExpectedIoTableInstance,
     ) -> Self {
         let gio = GateIoTableConfig::configure(meta, gate_io_table_advice);
         let wa = WireAssignmentTableConfig::configure(meta, wire_assignment_table_advice);
         let gdef = GateDefinitionTableConfig::configure(meta);
+        let eio = ExpectedIoTableConfig::configure(meta, expected_io_table_instance);
 
         meta.lookup_any("logic gates satisfaction", |meta| {
             let i_e_g = meta.query_fixed(gio.internal_enable_gate, Rotation::cur());
@@ -104,10 +110,19 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
             vec![(i_e_g * e_g, i_e_w), (o_idx, idx), (o_val, val)]
         });
 
+        meta.create_gate("input/output constraints satisfaction", |meta| {
+            let e_i_o = meta.query_instance(eio.enable_i_o, Rotation::cur());
+            let i_o_val = meta.query_instance(eio.i_o_val, Rotation::cur());
+            let val = meta.query_advice(wa.val, Rotation::cur());
+
+            vec![e_i_o * (val - i_o_val)]
+        });
+
         Self {
             gate_io_table: gio,
             wire_assignment_table: wa,
             gate_definition_table: gdef,
+            expected_io_table: eio,
         }
     }
 
@@ -189,8 +204,17 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
         let wire_assignment_table_advice = WireAssignmentTableAdvice {
             val: meta.advice_column(),
         };
+        let expected_io_table_instance = ExpectedIoTableInstance {
+            enable_i_o: meta.instance_column(),
+            i_o_val: meta.instance_column(),
+        };
 
-        ZktSimConfig::configure(meta, gate_io_table_advice, wire_assignment_table_advice)
+        ZktSimConfig::configure(
+            meta,
+            gate_io_table_advice,
+            wire_assignment_table_advice,
+            expected_io_table_instance,
+        )
     }
 
     fn synthesize(
@@ -202,7 +226,7 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
         config.wire_assignment_table.load_fixed(&mut layouter)?;
         config.gate_definition_table.load(&mut layouter)?;
 
-        for wire in self.boolean_circuit_instance.wires.iter() {
+        for wire in self.boolean_circuit_instance.assn.wires.iter() {
             let wire_val = if *wire {
                 Value::known(Assigned::from(F::ONE))
             } else {
@@ -212,10 +236,10 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
         }
         // Check if we need to explicity assign the zero wire in the last row (where internal_enable_wire is zero)?
 
-        for gate_io in self.boolean_circuit_instance.gates.iter() {
+        for gate_io in self.boolean_circuit_instance.ckt.gates.iter() {
             let va = |val: u64| Value::known(Assigned::from(F::from(val)));
             let wire_va = |idx: u64| {
-                if self.boolean_circuit_instance.wires[idx as usize] {
+                if self.boolean_circuit_instance.assn.wires[idx as usize] {
                     Value::known(Assigned::from(F::ONE))
                 } else {
                     Value::known(Assigned::from(F::ZERO))
@@ -255,12 +279,29 @@ pub fn run_mock_prover(ckt: BooleanCircuitInstance) {
     const G: usize = 1 << (k - 1);
     const W: usize = 1 << (k - 1);
 
-    let zktsim_circuit = ZktSimCircuit::<Fp, G, W> {
+    let circuit = ZktSimCircuit::<Fp, G, W> {
         boolean_circuit_instance: ckt,
         _marker: PhantomData,
     };
 
-    let prover = MockProver::run(k, &zktsim_circuit, vec![]).unwrap();
+    let bckt = &circuit.boolean_circuit_instance.ckt;
+    let bckt_assn = &circuit.boolean_circuit_instance.assn;
+
+    let mut inst_enable_i_o = vec![Fp::zero(); bckt_assn.wires.len()];
+    let mut inst_i_o_val = inst_enable_i_o.clone();
+
+    bckt.inputs.iter().for_each(|&i| {
+        inst_enable_i_o[i as usize] = Fp::one();
+        inst_i_o_val[i as usize] = Fp::from(bckt_assn.wires[i as usize]);
+    });
+    bckt.outputs.iter().for_each(|&o| {
+        inst_enable_i_o[o as usize] = Fp::one();
+        inst_i_o_val[o as usize] = Fp::from(bckt_assn.wires[o as usize]);
+    });
+
+    let instance = vec![inst_enable_i_o, inst_i_o_val];
+
+    let prover = MockProver::run(k, &circuit, instance).unwrap();
     prover.assert_satisfied();
 }
 
@@ -293,6 +334,21 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
         _marker: PhantomData,
     };
 
+    let bckt = &circuit.boolean_circuit_instance.ckt;
+    let bckt_assn = &circuit.boolean_circuit_instance.assn;
+
+    let mut inst_enable_i_o = vec![Fr::zero(); bckt_assn.wires.len()];
+    let mut inst_i_o_val = inst_enable_i_o.clone();
+
+    bckt.inputs.iter().for_each(|&i| {
+        inst_enable_i_o[i as usize] = Fr::one();
+        inst_i_o_val[i as usize] = Fr::from(bckt_assn.wires[i as usize]);
+    });
+    bckt.outputs.iter().for_each(|&o| {
+        inst_enable_i_o[o as usize] = Fr::one();
+        inst_i_o_val[o as usize] = Fr::from(bckt_assn.wires[o as usize]);
+    });
+
     println!("Creating parameters...");
 
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
@@ -300,7 +356,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
 
-    let instances: &[&[Fr]] = &[];
+    let instance: &[&[Fr]] = &[&inst_enable_i_o, &inst_i_o_val];
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
 
     println!("Generating proof...");
@@ -316,7 +372,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
         &params,
         &pk,
         &[circuit],
-        &[instances],
+        &[instance],
         OsRng,
         &mut transcript,
     )
@@ -336,13 +392,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
         Challenge255<G1Affine>,
         Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
         SingleStrategy<'_, Bn256>,
-    >(
-        &params,
-        pk.get_vk(),
-        strategy,
-        &[instances],
-        &mut transcript
-    )
+    >(&params, pk.get_vk(), strategy, &[instance], &mut transcript)
     .is_ok());
 
     println!("Proof verified!");
