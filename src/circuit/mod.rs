@@ -324,6 +324,8 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     use halo2curves::bn256::{Bn256, Fr, G1Affine};
     use rand_core::OsRng;
 
+    use std::time::Instant;
+
     #[allow(non_upper_case_globals)]
     const k: u32 = 12;
     const G: usize = 1 << (k - 1);
@@ -360,6 +362,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
 
     println!("Generating proof...");
+    let proof_start_time = Instant::now();
 
     create_proof::<
         KZGCommitmentScheme<Bn256>,
@@ -380,11 +383,17 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     let proof = transcript.finalize();
 
     println!("Proof generated!");
+    let proof_end_time = Instant::now();
+    println!(
+        "Proof generation time: {}ms",
+        proof_end_time.duration_since(proof_start_time).as_millis()
+    );
 
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
 
     println!("Verifying proof...");
+    let verification_start_time = Instant::now();
 
     assert!(verify_proof::<
         KZGCommitmentScheme<Bn256>,
@@ -396,4 +405,11 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     .is_ok());
 
     println!("Proof verified!");
+    let verification_end_time = Instant::now();
+    println!(
+        "Proof verification time: {}ms",
+        verification_end_time
+            .duration_since(verification_start_time)
+            .as_millis()
+    );
 }
