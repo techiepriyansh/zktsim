@@ -55,3 +55,11 @@
   ```
   e_i_o * (val - i_o_val) == 0;
   ```
+
+## Hash function - MiMC7 CBC encryption
+
+* Block size = 1 field element = 255 bits (BLS12-381 scalar field size)
+* Num rounds = `ceil(log(2**255, 7))` = 91
+* One block corresponds to 4 circuit netlist rows
+* Gate encoded as 3 bits and wire indexes encoded as 20 bits
+  * Size of 4 circuit netlist rows = `(3 + 20 * 3) * 4` = 252 bits
