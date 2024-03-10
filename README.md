@@ -63,3 +63,12 @@
 * One block corresponds to 4 circuit netlist rows
 * Gate encoded as 3 bits and wire indexes encoded as 20 bits
   * Size of 4 circuit netlist rows = `(3 + 20 * 3) * 4` = 252 bits
+
+
+## Hashing the circuit netlist
+
+* Sample a random key K
+* Hash K using the [LP231Ap](https://github.com/zcash/zcash/issues/2233#issuecomment-291840857) construction with the MiMC block cipher
+* Expose public this hashed value of K 
+* Encrypt the circuit netlist with MiMC7 CBC encryption using the key K
+* Expose public the encrypted circuit netlist
