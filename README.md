@@ -63,6 +63,8 @@
 * One block corresponds to 4 circuit netlist rows
 * Gate encoded as 3 bits and wire indexes encoded as 20 bits
   * Size of 4 circuit netlist rows = `(3 + 20 * 3) * 4` = 252 bits
+* Gate value already constrained to 3 bits because of the lookup in the Gate Definition Table
+* Wire indexes already constrained to be less than the circuit hyperparameter W; thus W must be `<= 2**20`
 
 
 ## Hashing the circuit netlist
