@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use halo2_proofs::{
     circuit::{Layouter, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Error, Fixed},
 };
 
 use halo2curves::ff::PrimeField;
@@ -64,6 +64,40 @@ impl<F: PrimeField, const G: usize> GateIoTableConfig<F, G> {
                         || Value::known(F::ONE),
                     )?;
                 }
+
+                Ok(())
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn assign_gate(
+        &self,
+        mut layouter: impl Layouter<F>,
+        gate: Value<Assigned<F>>,
+        l_idx: Value<Assigned<F>>,
+        l_val: Value<Assigned<F>>,
+        r_idx: Value<Assigned<F>>,
+        r_val: Value<Assigned<F>>,
+        o_idx: Value<Assigned<F>>,
+        o_val: Value<Assigned<F>>,
+    ) -> Result<(), Error> {
+        layouter.assign_region(
+            || "assign gate",
+            |mut region| {
+                region.assign_advice(
+                    || "enable_gate",
+                    self.enable_gate,
+                    0,
+                    || Value::known(F::ONE),
+                )?;
+                region.assign_advice(|| "gate", self.gate, 0, || gate)?;
+                region.assign_advice(|| "l_idx", self.l_idx, 0, || l_idx)?;
+                region.assign_advice(|| "l_val", self.l_val, 0, || l_val)?;
+                region.assign_advice(|| "r_idx", self.r_idx, 0, || r_idx)?;
+                region.assign_advice(|| "r_val", self.r_val, 0, || r_val)?;
+                region.assign_advice(|| "o_idx", self.o_idx, 0, || o_idx)?;
+                region.assign_advice(|| "o_val", self.o_val, 0, || o_val)?;
 
                 Ok(())
             },

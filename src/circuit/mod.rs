@@ -13,6 +13,9 @@ use halo2curves::ff::PrimeField;
 
 use crate::boolean_circuit::BooleanCircuitInstance;
 
+mod common;
+use common::*;
+
 mod gate_io_table;
 use gate_io_table::{GateIoTableAdvice, GateIoTableConfig};
 
@@ -26,9 +29,6 @@ mod expected_io_table;
 use expected_io_table::{ExpectedIoTableConfig, ExpectedIoTableInstance};
 
 mod mimc7_cbc_cipher;
-
-#[derive(Debug, Clone)]
-struct ACell<F: PrimeField>(AssignedCell<Assigned<F>, F>);
 
 #[derive(Debug, Clone)]
 struct ZktSimConfig<F: PrimeField, const G: usize, const W: usize> {
@@ -127,55 +127,6 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
             expected_io_table: eio,
         }
     }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn assign_gate(
-        &self,
-        mut layouter: impl Layouter<F>,
-        gate: Value<Assigned<F>>,
-        l_idx: Value<Assigned<F>>,
-        l_val: Value<Assigned<F>>,
-        r_idx: Value<Assigned<F>>,
-        r_val: Value<Assigned<F>>,
-        o_idx: Value<Assigned<F>>,
-        o_val: Value<Assigned<F>>,
-    ) -> Result<(), Error> {
-        layouter.assign_region(
-            || "assign gate",
-            |mut region| {
-                region.assign_advice(
-                    || "enable_gate",
-                    self.gate_io_table.enable_gate,
-                    0,
-                    || Value::known(F::ONE),
-                )?;
-                region.assign_advice(|| "gate", self.gate_io_table.gate, 0, || gate)?;
-                region.assign_advice(|| "l_idx", self.gate_io_table.l_idx, 0, || l_idx)?;
-                region.assign_advice(|| "l_val", self.gate_io_table.l_val, 0, || l_val)?;
-                region.assign_advice(|| "r_idx", self.gate_io_table.r_idx, 0, || r_idx)?;
-                region.assign_advice(|| "r_val", self.gate_io_table.r_val, 0, || r_val)?;
-                region.assign_advice(|| "o_idx", self.gate_io_table.o_idx, 0, || o_idx)?;
-                region.assign_advice(|| "o_val", self.gate_io_table.o_val, 0, || o_val)?;
-
-                Ok(())
-            },
-        )
-    }
-
-    pub fn assign_wire(
-        &self,
-        mut layouter: impl Layouter<F>,
-        value: Value<Assigned<F>>,
-    ) -> Result<ACell<F>, Error> {
-        layouter.assign_region(
-            || "assign wire",
-            |mut region| {
-                region
-                    .assign_advice(|| "wire value", self.wire_assignment_table.val, 0, || value)
-                    .map(ACell)
-            },
-        )
-    }
 }
 
 #[derive(Default)]
@@ -234,7 +185,9 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
             } else {
                 Value::known(Assigned::from(F::ZERO))
             };
-            config.assign_wire(layouter.namespace(|| "assign wire"), wire_val)?;
+            config
+                .wire_assignment_table
+                .assign_wire(layouter.namespace(|| "assign wire"), wire_val)?;
         }
         // Check if we need to explicity assign the zero wire in the last row (where internal_enable_wire is zero)?
 
@@ -256,7 +209,7 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
             let o_idx = va(gate_io.o_idx);
             let o_val = wire_va(gate_io.o_idx);
 
-            config.assign_gate(
+            config.gate_io_table.assign_gate(
                 layouter.namespace(|| "assign gate"),
                 gate,
                 l_idx,

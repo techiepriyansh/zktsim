@@ -2,10 +2,12 @@ use std::marker::PhantomData;
 
 use halo2_proofs::{
     circuit::{Layouter, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Error, Fixed},
 };
 
 use halo2curves::ff::PrimeField;
+
+use super::common::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct WireAssignmentTableConfig<F: PrimeField, const W: usize> {
@@ -72,6 +74,21 @@ impl<F: PrimeField, const W: usize> WireAssignmentTableConfig<F, W> {
                 )?;
 
                 Ok(())
+            },
+        )
+    }
+
+    pub(super) fn assign_wire(
+        &self,
+        mut layouter: impl Layouter<F>,
+        value: Value<Assigned<F>>,
+    ) -> Result<ACell<F>, Error> {
+        layouter.assign_region(
+            || "assign wire",
+            |mut region| {
+                region
+                    .assign_advice(|| "wire value", self.val, 0, || value)
+                    .map(ACell)
             },
         )
     }
