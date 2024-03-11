@@ -89,13 +89,13 @@ impl BooleanCircuit {
                     let wiring_vec = line.split_ascii_whitespace().collect::<Vec<&str>>();
 
                     let gate: u64 = match wiring_vec[0] {
-                        "not" => 0,
-                        "and" => 1,
-                        "nand" => 2,
-                        "or" => 3,
-                        "nor" => 4,
-                        "xor" => 5,
-                        "xnor" => 6,
+                        "not" => 1,
+                        "and" => 2,
+                        "nand" => 3,
+                        "or" => 4,
+                        "nor" => 5,
+                        "xor" => 6,
+                        "xnor" => 7,
                         _ => Err(Error::new(
                             ErrorKind::InvalidData,
                             format!("invalid gate {}", wiring_vec[0]),
@@ -155,13 +155,13 @@ impl BooleanCircuit {
             let l = wires[gate_io.l_idx as usize];
             let r = wires[gate_io.r_idx as usize];
             let o = match gate_io.gate {
-                0 => !l,
-                1 => l & r,
-                2 => !(l & r),
-                3 => l | r,
-                4 => !(l | r),
-                5 => l ^ r,
-                6 => !(l ^ r),
+                1 => !l,
+                2 => l & r,
+                3 => !(l & r),
+                4 => l | r,
+                5 => !(l | r),
+                6 => l ^ r,
+                7 => !(l ^ r),
                 _ => panic!("invalid gate {}", gate_io.gate),
             };
             wires[gate_io.o_idx as usize] = o;
