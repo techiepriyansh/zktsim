@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 
 use halo2_proofs::{
-    circuit::{Layouter, Value},
+    circuit::{Layouter, Region, Value},
     plonk::{
         Advice, Assigned, Column, ConstraintSystem, Error,
         Expression::{self, Constant},
-        Fixed,
+        Fixed, Selector,
     },
     poly::Rotation,
 };
@@ -16,7 +16,7 @@ use super::common::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct Mimc7CbcCipherConfig<F: PrimeField, const N: usize> {
-    pub(super) enable_cipher: Column<Fixed>,
+    pub(super) s: Selector,
     pub(super) k: Column<Advice>,
     pub(super) iv: Column<Advice>,
     pub(super) x_in: Column<Advice>,
@@ -29,7 +29,6 @@ pub(super) struct Mimc7CbcCipherConfig<F: PrimeField, const N: usize> {
 }
 
 pub(super) struct Mimc7CbcCipherParams<F: PrimeField> {
-    pub(super) enable_cipher: Column<Fixed>,
     pub(super) x_in: Column<Advice>,
     pub(super) c: [F; 91], // round constants
 }
@@ -39,6 +38,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         meta: &mut ConstraintSystem<F>,
         params: Mimc7CbcCipherParams<F>,
     ) -> Self {
+        let s = meta.selector();
         let k = meta.advice_column();
         let iv = meta.advice_column();
         let x: [Column<Advice>; 92] = (0..92)
@@ -53,7 +53,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         meta.enable_equality(x_out);
 
         meta.create_gate("MiMC7 CBC encryption round function", |meta| {
-            let e_c = meta.query_fixed(params.enable_cipher, Rotation::cur());
+            let s_ = meta.query_selector(s);
             let k_ = meta.query_advice(k, Rotation::cur());
             let x_ = (0..92)
                 .map(|i| meta.query_advice(x[i], Rotation::cur()))
@@ -69,36 +69,36 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
 
             (0..91)
                 .map(|i| {
-                    let e_c = e_c.clone();
+                    let s__ = s_.clone();
                     let k__ = k_.clone();
                     let x_i = x_[i].clone();
                     let x_ip1 = x_[i + 1].clone();
 
-                    e_c * (pow7(x_i + Constant(c[i]) + k__) - x_ip1)
+                    s__ * (pow7(x_i + Constant(c[i]) + k__) - x_ip1)
                 })
                 .collect::<Vec<_>>()
         });
 
         meta.create_gate("MiMC7 CBC encryption cipher input", |meta| {
-            let e_c = meta.query_fixed(params.enable_cipher, Rotation::cur());
+            let s_ = meta.query_selector(s);
             let iv_ = meta.query_advice(iv, Rotation::cur());
             let x_in_ = meta.query_advice(params.x_in, Rotation::cur());
             let x_0_ = meta.query_advice(x[0], Rotation::cur());
 
-            vec![e_c * (x_in_ + iv_ - x_0_)]
+            vec![s_ * (x_in_ + iv_ - x_0_)]
         });
 
         meta.create_gate("MiMC7 CBC encryption cipher output", |meta| {
-            let e_c = meta.query_fixed(params.enable_cipher, Rotation::cur());
+            let s_ = meta.query_selector(s);
             let k_ = meta.query_advice(k, Rotation::cur());
             let x_91_ = meta.query_advice(x[91], Rotation::cur());
             let x_out_ = meta.query_advice(x_out, Rotation::cur());
 
-            vec![e_c * (x_91_ + k_ - x_out_)]
+            vec![s_ * (x_91_ + k_ - x_out_)]
         });
 
         Self {
-            enable_cipher: params.enable_cipher,
+            s,
             k,
             iv,
             x_in: params.x_in,
@@ -112,13 +112,23 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
     pub(super) fn synthesize(
         &self,
         mut layouter: impl Layouter<F>,
-        x_in_vals: Vec<F>,
+        x_in_quarter_vals: Vec<F>,
         k_val: F,
     ) -> Result<(), Error> {
-        assert!(x_in_vals.len() <= N);
+        assert!(x_in_quarter_vals.len() <= N);
+        assert!(N % 4 == 0);
 
-        let mut x_in_vals = x_in_vals;
-        x_in_vals.extend((0..(N - x_in_vals.len())).map(|_| F::ZERO));
+        let mut x_in_quarter_vals = x_in_quarter_vals;
+        x_in_quarter_vals.extend((0..(N - x_in_quarter_vals.len())).map(|_| F::ZERO));
+
+        let x_in_vals = x_in_quarter_vals
+            .chunks(4)
+            .map(|l| {
+                ((l[3] * F::from(1 << 63u64) + l[2]) * F::from(1 << 63u64) + l[1])
+                    * F::from(1 << 63u64)
+                    + l[0]
+            })
+            .collect::<Vec<F>>();
 
         let va = |v: F| Value::known(Assigned::from(v));
 
@@ -139,6 +149,8 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
             (prev_k_acell, prev_x_out_acell) = layouter.assign_region(
                 || format!("MiMC7 CBC assignment for row {}", row),
                 |mut region| {
+                    self.s.enable(&mut region, 0)?;
+
                     let k_acell = prev_k_acell.clone().map_or(
                         Some(
                             region
@@ -186,10 +198,56 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
                 },
             )?;
 
+            self.load_zero_row(layouter.namespace(|| "MiMC7 CBC zero row"))?;
+            self.load_zero_row(layouter.namespace(|| "MiMC7 CBC zero row"))?;
+            self.load_zero_row(layouter.namespace(|| "MiMC7 CBC zero row"))?;
+
             iv_val = x_out_val;
         }
 
         Ok(())
+    }
+
+    fn load_zero_row(&self, mut layouter: impl Layouter<F>) -> Result<(), Error> {
+        layouter.assign_region(
+            || "MiMC7 CBC assignment zero row",
+            |mut region| {
+                region.assign_advice(
+                    || "k",
+                    self.k,
+                    0,
+                    || Value::known(Assigned::from(F::ZERO)),
+                )?;
+                region.assign_advice(
+                    || "iv",
+                    self.iv,
+                    0,
+                    || Value::known(Assigned::from(F::ZERO)),
+                )?;
+                region.assign_advice(
+                    || "x_in",
+                    self.x_in,
+                    0,
+                    || Value::known(Assigned::from(F::ZERO)),
+                )?;
+                for i in 0..92 {
+                    region.assign_advice(
+                        || format!("x_{}", i),
+                        self.x[i],
+                        0,
+                        || Value::known(Assigned::from(F::ZERO)),
+                    )?;
+                }
+                region.assign_advice(
+                    || "x_out",
+                    self.x_out,
+                    0,
+                    || Value::known(Assigned::from(F::ZERO)),
+                )?;
+
+                Ok(())
+            },
+        )
     }
 }
 

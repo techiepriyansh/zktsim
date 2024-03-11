@@ -68,24 +68,24 @@
 
 **MiMC7 CBC Arithmetization Table**
 
-| e_c           | k      | iv                   | x_in         | x_0       | ...                 | x_91       | x_out         |
-| ------------- | ------ | -------------------- | ------------ | --------- | ------------------- | ---------- | ------------- |
-| Fixed         | Advice | Advice               | Advice       | Advice    | Advice              | Advice     | Advice        |
-| Enable cipher | Key    | Initialization value | Cipher input | Aux input | Intermediate values | Aux output | Cipher output |
+| s                          | k      | iv                   | x_in         | x_0       | ...                 | x_91       | x_out         |
+| -------------------------- | ------ | -------------------- | ------------ | --------- | ------------------- | ---------- | ------------- |
+| Selector                   | Advice | Advice               | Advice       | Advice    | Advice              | Advice     | Advice        |
+| Enable cipher every 4 rows | Key    | Initialization value | Cipher input | Aux input | Intermediate values | Aux output | Cipher output |
 
 **Constraints**
 
 * Round function
   
   ```
-  e_c * ((x_[i] + c_[i] + k) ** 7 - x_[i+1]) == 0 for i in 0..91;
+  s * ((x_[i] + c_[i] + k) ** 7 - x_[i+1]) == 0 for i in 0..91;
   ```
 
 * Cipher input/output
   
   ```
-  e_c * (x_in + iv - x_0) == 0;
-  e_c * (x_91 + k - x_out) == 0;
+  s * (x_in + iv - x_0) == 0;
+  s * (x_91 + k - x_out) == 0;
   ```
 
 * Key copy 
@@ -117,6 +117,13 @@
   
   * Set `e_c = i_e_g`
   
-  * Constrain`i_e_g * (g + l_idx * 2**3 + r_idx * 2**23 + o_idx * 2**43 - x_in) == 0 `
+  * Constrain 
     
-    
+    ```
+    // s_i_e := selector input encode; enabled every range(0, G, 4)
+    l0 := g + l_idx * 2**3 + r_idx * 2**23 + o_idx * 2**43;
+    l1 := g[+1] + l_idx[+1] * 2**3 + r_idx[+1] * 2**23 + o_idx[+1] * 2**43;
+    l2 := g[+2] + l_idx[+2] * 2**3 + r_idx[+2] * 2**23 + o_idx[+2] * 2**43;
+    l2 := g[+3] + l_idx[+3] * 2**3 + r_idx[+3] * 2**23 + o_idx[+3] * 2**43;
+    s_i_e * (l0 + l1 * 2**63 + l2 * 2**126 + l3 * 2**189 - x_in) == 0;
+    ```
