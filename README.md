@@ -115,6 +115,8 @@
   
   * Instantitate MiMC7 CBC encryption arithmetization table
   
-  * Set `x_0 = g + l_idx * 2**3 + r_idx * 2**23 + o_idx * 2**43 `
+  * Set `e_c = i_e_g`
   
-  * Set `e_c = i_e_g` 
+  * Constrain`i_e_g * (g + l_idx * 2**3 + r_idx * 2**23 + o_idx * 2**43 - x_in) == 0 `
+    
+    

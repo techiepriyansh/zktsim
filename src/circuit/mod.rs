@@ -29,6 +29,7 @@ mod expected_io_table;
 use expected_io_table::{ExpectedIoTableConfig, ExpectedIoTableInstance};
 
 mod mimc7_cbc_cipher;
+use mimc7_cbc_cipher::{Mimc7CbcCipherConfig, Mimc7CbcCipherParams, Mimc7DefaultConstants};
 
 #[derive(Debug, Clone)]
 struct ZktSimConfig<F: PrimeField, const G: usize, const W: usize> {
@@ -36,6 +37,7 @@ struct ZktSimConfig<F: PrimeField, const G: usize, const W: usize> {
     wire_assignment_table: WireAssignmentTableConfig<F, W>,
     gate_definition_table: GateDefinitionTableConfig<F>,
     expected_io_table: ExpectedIoTableConfig<F>,
+    mimc7_cbc_cipher: Mimc7CbcCipherConfig<F, G>,
 }
 
 impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
@@ -44,11 +46,19 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
         gate_io_table_advice: GateIoTableAdvice,
         wire_assignment_table_advice: WireAssignmentTableAdvice,
         expected_io_table_instance: ExpectedIoTableInstance,
+        mimc7_cbc_cipher_input_advice: Column<Advice>,
     ) -> Self {
         let gio = GateIoTableConfig::configure(meta, gate_io_table_advice);
         let wa = WireAssignmentTableConfig::configure(meta, wire_assignment_table_advice);
         let gdef = GateDefinitionTableConfig::configure(meta);
         let eio = ExpectedIoTableConfig::configure(meta, expected_io_table_instance);
+
+        let mimc7_cbc_cipher_params = Mimc7CbcCipherParams {
+            enable_cipher: gio.internal_enable_gate,
+            x_in: mimc7_cbc_cipher_input_advice,
+            c: Mimc7DefaultConstants(),
+        };
+        let mcc = Mimc7CbcCipherConfig::<F, G>::configure(meta, mimc7_cbc_cipher_params);
 
         meta.lookup_any("logic gates satisfaction", |meta| {
             let i_e_g = meta.query_fixed(gio.internal_enable_gate, Rotation::cur());
@@ -120,11 +130,29 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
             vec![e_i_o * (val - i_o_val)]
         });
 
+        meta.create_gate("input encoding for circuit netlist encryption", |meta| {
+            let i_e_g = meta.query_fixed(gio.internal_enable_gate, Rotation::cur());
+            let g = meta.query_advice(gio.gate, Rotation::cur());
+            let l_idx = meta.query_advice(gio.l_idx, Rotation::cur());
+            let r_idx = meta.query_advice(gio.r_idx, Rotation::cur());
+            let o_idx = meta.query_advice(gio.o_idx, Rotation::cur());
+            let x_in = meta.query_advice(mcc.x_in, Rotation::cur());
+
+            vec![
+                i_e_g
+                    * (g + l_idx * F::from(1 << 3u64)
+                        + r_idx * F::from(1 << 23u64)
+                        + o_idx * F::from(1 << 43u64)
+                        - x_in),
+            ]
+        });
+
         Self {
             gate_io_table: gio,
             wire_assignment_table: wa,
             gate_definition_table: gdef,
             expected_io_table: eio,
+            mimc7_cbc_cipher: mcc,
         }
     }
 }
@@ -132,6 +160,7 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
 #[derive(Default)]
 struct ZktSimCircuit<F: PrimeField, const G: usize, const W: usize> {
     boolean_circuit_instance: BooleanCircuitInstance,
+    encryption_key: F,
     _marker: PhantomData<F>,
 }
 
@@ -161,12 +190,14 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
             enable_i_o: meta.instance_column(),
             i_o_val: meta.instance_column(),
         };
+        let mimc7_cbc_cipher_input_advice = meta.advice_column();
 
         ZktSimConfig::configure(
             meta,
             gate_io_table_advice,
             wire_assignment_table_advice,
             expected_io_table_instance,
+            mimc7_cbc_cipher_input_advice,
         )
     }
 
@@ -190,6 +221,8 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
                 .assign_wire(layouter.namespace(|| "assign wire"), wire_val)?;
         }
         // Check if we need to explicity assign the zero wire in the last row (where internal_enable_wire is zero)?
+
+        let mut x_in_vals = Vec::<F>::new();
 
         for gate_io in self.boolean_circuit_instance.ckt.gates.iter() {
             let va = |val: u64| Value::known(Assigned::from(F::from(val)));
@@ -219,7 +252,23 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
                 o_idx,
                 o_val,
             )?;
+
+            let g = F::from(gate_io.gate);
+            let l_idx = F::from(gate_io.l_idx);
+            let r_idx = F::from(gate_io.r_idx);
+            let o_idx = F::from(gate_io.o_idx);
+            x_in_vals.push(
+                g + l_idx * F::from(1 << 3u64)
+                    + r_idx * F::from(1 << 23u64)
+                    + o_idx * F::from(1 << 43u64),
+            );
         }
+
+        config.mimc7_cbc_cipher.synthesize(
+            layouter.namespace(|| "Circuit netlist encryption"),
+            x_in_vals,
+            self.encryption_key,
+        )?;
 
         Ok(())
     }
@@ -236,6 +285,7 @@ pub fn run_mock_prover(ckt: BooleanCircuitInstance) {
 
     let circuit = ZktSimCircuit::<Fp, G, W> {
         boolean_circuit_instance: ckt,
+        encryption_key: Fp::from(1337u64),
         _marker: PhantomData,
     };
 
@@ -288,6 +338,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
 
     let circuit = ZktSimCircuit::<Fr, G, W> {
         boolean_circuit_instance: ckt,
+        encryption_key: Fr::from(1337u64),
         _marker: PhantomData,
     };
 

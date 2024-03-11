@@ -41,12 +41,23 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
     ) -> Self {
         let k = meta.advice_column();
         let iv = meta.advice_column();
-        let x = [meta.advice_column(); 92];
+        let x: [Column<Advice>; 92] = (0..92)
+            .map(|_| meta.advice_column())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
         let x_out = meta.advice_column();
+
+        meta.enable_equality(k);
+        meta.enable_equality(iv);
+        meta.enable_equality(x_out);
 
         meta.create_gate("MiMC7 CBC encryption round function", |meta| {
             let e_c = meta.query_fixed(params.enable_cipher, Rotation::cur());
-            let k = meta.query_advice(k, Rotation::cur());
+            let k_ = meta.query_advice(k, Rotation::cur());
+            let x_ = (0..92)
+                .map(|i| meta.query_advice(x[i], Rotation::cur()))
+                .collect::<Vec<Expression<F>>>();
 
             let c = params.c;
 
@@ -58,33 +69,32 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
 
             (0..91)
                 .map(|i| {
-                    let x_i = meta.query_advice(x[i], Rotation::cur());
-                    let x_ip1 = meta.query_advice(x[i + 1], Rotation::cur());
-
                     let e_c = e_c.clone();
-                    let k = k.clone();
+                    let k__ = k_.clone();
+                    let x_i = x_[i].clone();
+                    let x_ip1 = x_[i + 1].clone();
 
-                    e_c * (pow7(x_i + Constant(c[i]) + k) - x_ip1)
+                    e_c * (pow7(x_i + Constant(c[i]) + k__) - x_ip1)
                 })
                 .collect::<Vec<_>>()
         });
 
         meta.create_gate("MiMC7 CBC encryption cipher input", |meta| {
             let e_c = meta.query_fixed(params.enable_cipher, Rotation::cur());
-            let iv = meta.query_advice(iv, Rotation::cur());
-            let x_in = meta.query_advice(params.x_in, Rotation::cur());
-            let x_0 = meta.query_advice(x[0], Rotation::cur());
+            let iv_ = meta.query_advice(iv, Rotation::cur());
+            let x_in_ = meta.query_advice(params.x_in, Rotation::cur());
+            let x_0_ = meta.query_advice(x[0], Rotation::cur());
 
-            vec![e_c * (x_in + iv - x_0)]
+            vec![e_c * (x_in_ + iv_ - x_0_)]
         });
 
         meta.create_gate("MiMC7 CBC encryption cipher output", |meta| {
             let e_c = meta.query_fixed(params.enable_cipher, Rotation::cur());
-            let k = meta.query_advice(k, Rotation::cur());
-            let x_91 = meta.query_advice(x[91], Rotation::cur());
-            let x_out = meta.query_advice(x_out, Rotation::cur());
+            let k_ = meta.query_advice(k, Rotation::cur());
+            let x_91_ = meta.query_advice(x[91], Rotation::cur());
+            let x_out_ = meta.query_advice(x_out, Rotation::cur());
 
-            vec![e_c * (x_91 + k - x_out)]
+            vec![e_c * (x_91_ + k_ - x_out_)]
         });
 
         Self {
@@ -181,4 +191,12 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
 
         Ok(())
     }
+}
+
+pub(super) fn Mimc7DefaultConstants<F: PrimeField>() -> [F; 91] {
+    let mut c = [F::ZERO; 91];
+    for i in 1..91 {
+        c[i] = F::from(i as u64);
+    }
+    c
 }
