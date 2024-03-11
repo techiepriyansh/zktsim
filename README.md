@@ -66,6 +66,31 @@
 * Gate value already constrained to 3 bits because of the lookup in the Gate Definition Table
 * Wire indexes already constrained to be less than the circuit hyperparameter W; thus W must be `<= 2**20`
 
+**MiMC7 CBC Arithmetization Table**
+
+| e_c           | k      | iv                   | x_0          | ...                 | x_91          |
+| ------------- | ------ | -------------------- | ------------ | ------------------- | ------------- |
+| Fixed         | Advice | Advice               | Advice       | Advice              | Advice        |
+| Enable cipher | Key    | Initialization value | Cipher input | Intermediate values | Cipher output |
+
+**Constraints**
+
+* Round function
+  
+  ```
+  e_c * ((x_[i] + iv + c_[i] + k) ** 7 - x_[i+1]) == 0 for i in 0..91;
+  ```
+
+* ```
+  // same k copied throughout the column 
+  ```
+
+* Initialization value copy
+  
+  ```
+  // iv == 0 for the first row
+  // iv == (x_91 from the previous row) for the remaining rows
+  ```
 
 ## Hashing the circuit netlist
 
@@ -74,3 +99,15 @@
 * Expose public this hashed value of K 
 * Encrypt the circuit netlist with MiMC7 CBC encryption using the key K
 * Expose public the encrypted circuit netlist
+
+**Arithmetization**
+
+* Circuit netlist encryption
+  
+  * Instantitate MiMC7 CBC encryption arithmetization table
+  
+  * Set `x_0 = g + l_idx * 2**3 + r_idx * 2**23 + o_idx * 2**43 `
+  
+  * Set `e_c = i_e_g` 
+
+ 
