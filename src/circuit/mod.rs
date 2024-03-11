@@ -25,6 +25,8 @@ use wire_assignment_table::{WireAssignmentTableAdvice, WireAssignmentTableConfig
 mod expected_io_table;
 use expected_io_table::{ExpectedIoTableConfig, ExpectedIoTableInstance};
 
+mod mimc7_cbc_cipher;
+
 #[derive(Debug, Clone)]
 struct ACell<F: PrimeField>(AssignedCell<Assigned<F>, F>);
 
