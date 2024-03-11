@@ -68,20 +68,29 @@
 
 **MiMC7 CBC Arithmetization Table**
 
-| e_c           | k      | iv                   | x_0          | ...                 | x_91          |
-| ------------- | ------ | -------------------- | ------------ | ------------------- | ------------- |
-| Fixed         | Advice | Advice               | Advice       | Advice              | Advice        |
-| Enable cipher | Key    | Initialization value | Cipher input | Intermediate values | Cipher output |
+| e_c           | k      | iv                   | x_in         | x_0       | ...                 | x_91       | x_out         |
+| ------------- | ------ | -------------------- | ------------ | --------- | ------------------- | ---------- | ------------- |
+| Fixed         | Advice | Advice               | Advice       | Advice    | Advice              | Advice     | Advice        |
+| Enable cipher | Key    | Initialization value | Cipher input | Aux input | Intermediate values | Aux output | Cipher output |
 
 **Constraints**
 
 * Round function
   
   ```
-  e_c * ((x_[i] + iv + c_[i] + k) ** 7 - x_[i+1]) == 0 for i in 0..91;
+  e_c * ((x_[i] + c_[i] + k) ** 7 - x_[i+1]) == 0 for i in 0..91;
   ```
 
-* ```
+* Cipher input/output
+  
+  ```
+  e_c * (x_in + iv - x_0) == 0;
+  e_c * (x_91 + k - x_out) == 0;
+  ```
+
+* Key copy 
+  
+  ```
   // same k copied throughout the column 
   ```
 
@@ -89,7 +98,7 @@
   
   ```
   // iv == 0 for the first row
-  // iv == (x_91 from the previous row) for the remaining rows
+  // iv == (x_out from the previous row) for the remaining rows
   ```
 
 ## Hashing the circuit netlist
@@ -109,5 +118,3 @@
   * Set `x_0 = g + l_idx * 2**3 + r_idx * 2**23 + o_idx * 2**43 `
   
   * Set `e_c = i_e_g` 
-
- 
