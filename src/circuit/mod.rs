@@ -126,19 +126,51 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
 
         meta.create_gate("input encoding for circuit netlist encryption", |meta| {
             let s = meta.query_selector(mcc.s);
+            let x_in = meta.query_advice(mcc.x_in, Rotation::cur());
 
             let g = meta.query_advice(gio.gate, Rotation::cur());
             let l_idx = meta.query_advice(gio.l_idx, Rotation::cur());
             let r_idx = meta.query_advice(gio.r_idx, Rotation::cur());
             let o_idx = meta.query_advice(gio.o_idx, Rotation::cur());
-            let x_in = meta.query_advice(mcc.x_in, Rotation::cur());
+            let limb0 = g
+                + l_idx * F::from(1 << 3u64)
+                + r_idx * F::from(1 << 23u64)
+                + o_idx * F::from(1 << 43u64);
+
+            let gp1 = meta.query_advice(gio.gate, Rotation(1));
+            let l_idx_p1 = meta.query_advice(gio.l_idx, Rotation(1));
+            let r_idx_p1 = meta.query_advice(gio.r_idx, Rotation(1));
+            let o_idx_p1 = meta.query_advice(gio.o_idx, Rotation(1));
+            let limb1 = gp1
+                + l_idx_p1 * F::from(1 << 3u64)
+                + r_idx_p1 * F::from(1 << 23u64)
+                + o_idx_p1 * F::from(1 << 43u64);
+
+            let gp2 = meta.query_advice(gio.gate, Rotation(2));
+            let l_idx_p2 = meta.query_advice(gio.l_idx, Rotation(2));
+            let r_idx_p2 = meta.query_advice(gio.r_idx, Rotation(2));
+            let o_idx_p2 = meta.query_advice(gio.o_idx, Rotation(2));
+            let limb2 = gp2
+                + l_idx_p2 * F::from(1 << 3u64)
+                + r_idx_p2 * F::from(1 << 23u64)
+                + o_idx_p2 * F::from(1 << 43u64);
+
+            let gp3 = meta.query_advice(gio.gate, Rotation(3));
+            let l_idx_p3 = meta.query_advice(gio.l_idx, Rotation(3));
+            let r_idx_p3 = meta.query_advice(gio.r_idx, Rotation(3));
+            let o_idx_p3 = meta.query_advice(gio.o_idx, Rotation(3));
+            let x_in_p3 = meta.query_advice(mcc.x_in, Rotation(3));
+            let limb3 = gp3
+                + l_idx_p3 * F::from(1 << 3u64)
+                + r_idx_p3 * F::from(1 << 23u64)
+                + o_idx_p3 * F::from(1 << 43u64)
+                + x_in_p3 * F::from(1 << 63u64);
 
             vec![
-                s
-                    * (g + l_idx * F::from(1 << 3u64)
-                        + r_idx * F::from(1 << 23u64)
-                        + o_idx * F::from(1 << 43u64)
-                        - x_in),
+                s * (((limb3 * F::from(1 << 63u64) + limb2) * F::from(1 << 63u64) + limb1)
+                    * F::from(1 << 63u64)
+                    + limb0
+                    - x_in),
             ]
         });
 
