@@ -159,12 +159,10 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
             let l_idx_p3 = meta.query_advice(gio.l_idx, Rotation(3));
             let r_idx_p3 = meta.query_advice(gio.r_idx, Rotation(3));
             let o_idx_p3 = meta.query_advice(gio.o_idx, Rotation(3));
-            let x_in_p3 = meta.query_advice(mcc.x_in, Rotation(3));
             let limb3 = gp3
                 + l_idx_p3 * F::from(1 << 3u64)
                 + r_idx_p3 * F::from(1 << 23u64)
-                + o_idx_p3 * F::from(1 << 43u64)
-                + x_in_p3 * F::from(1 << 63u64);
+                + o_idx_p3 * F::from(1 << 43u64);
 
             vec![
                 s * (((limb3 * F::from(1 << 63u64) + limb2) * F::from(1 << 63u64) + limb1)
