@@ -31,6 +31,8 @@ use expected_io_table::{ExpectedIoTableConfig, ExpectedIoTableInstance};
 mod mimc7_cbc_cipher;
 use mimc7_cbc_cipher::{Mimc7CbcCipherConfig, Mimc7CbcCipherParams, Mimc7DefaultConstants};
 
+mod poseidon_bn256_fr;
+
 #[derive(Debug, Clone)]
 struct ZktSimConfig<F: PrimeField, const G: usize, const W: usize> {
     gate_io_table: GateIoTableConfig<F, G>,
