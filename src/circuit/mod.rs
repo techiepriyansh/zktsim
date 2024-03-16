@@ -9,7 +9,8 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use halo2curves::ff::PrimeField;
+use ff::Field;
+use halo2curves::bn256::Fr as F;
 
 use crate::boolean_circuit::BooleanCircuitInstance;
 
@@ -32,17 +33,19 @@ mod mimc7_cbc_cipher;
 use mimc7_cbc_cipher::{Mimc7CbcCipherConfig, Mimc7CbcCipherParams, Mimc7DefaultConstants};
 
 mod poseidon_bn256_fr;
+use poseidon_bn256_fr::{PoseidonBN256FrConfig, PoseidonBN256FrSynthesisOutput};
 
 #[derive(Debug, Clone)]
-struct ZktSimConfig<F: PrimeField, const G: usize, const W: usize> {
+struct ZktSimConfig<const G: usize, const W: usize> {
     gate_io_table: GateIoTableConfig<F, G>,
     wire_assignment_table: WireAssignmentTableConfig<F, W>,
     gate_definition_table: GateDefinitionTableConfig<F>,
     expected_io_table: ExpectedIoTableConfig<F>,
     mimc7_cbc_cipher: Mimc7CbcCipherConfig<F, G>,
+    poseidon_bn256_fr: PoseidonBN256FrConfig,
 }
 
-impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
+impl<const G: usize, const W: usize> ZktSimConfig<G, W> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         gate_io_table_advice: GateIoTableAdvice,
@@ -55,6 +58,7 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
         let gdef = GateDefinitionTableConfig::configure(meta);
         let eio = ExpectedIoTableConfig::configure(meta, expected_io_table_instance);
         let mcc = Mimc7CbcCipherConfig::<F, G>::configure(meta, mimc7_cbc_cipher_params);
+        let psd = PoseidonBN256FrConfig::configure(meta);
 
         meta.lookup_any("logic gates satisfaction", |meta| {
             let i_e_g = meta.query_fixed(gio.internal_enable_gate, Rotation::cur());
@@ -180,19 +184,19 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
             gate_definition_table: gdef,
             expected_io_table: eio,
             mimc7_cbc_cipher: mcc,
+            poseidon_bn256_fr: psd,
         }
     }
 }
 
 #[derive(Default)]
-struct ZktSimCircuit<F: PrimeField, const G: usize, const W: usize> {
+struct ZktSimCircuit<const G: usize, const W: usize> {
     boolean_circuit_instance: BooleanCircuitInstance,
     encryption_key: F,
-    _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit<F, G, W> {
-    type Config = ZktSimConfig<F, G, W>;
+impl<const G: usize, const W: usize> Circuit<F> for ZktSimCircuit<G, W> {
+    type Config = ZktSimConfig<G, W>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -294,10 +298,16 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
             );
         }
 
+        let poseidon_synth_out = config.poseidon_bn256_fr.synthesize(
+            layouter.namespace(|| "Poseidon hash of encryption key"),
+            self.encryption_key,
+        )?;
+
         config.mimc7_cbc_cipher.synthesize(
             layouter.namespace(|| "Circuit netlist encryption"),
             x_in_quarter_vals,
             self.encryption_key,
+            poseidon_synth_out.message.cell(),
         )?;
 
         Ok(())
@@ -306,32 +316,30 @@ impl<F: PrimeField, const G: usize, const W: usize> Circuit<F> for ZktSimCircuit
 
 pub fn run_mock_prover(ckt: BooleanCircuitInstance) {
     use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp;
 
     #[allow(non_upper_case_globals)]
     const k: u32 = 12;
     const G: usize = 1 << (k - 1);
     const W: usize = 1 << (k - 1);
 
-    let circuit = ZktSimCircuit::<Fp, G, W> {
+    let circuit = ZktSimCircuit::<G, W> {
         boolean_circuit_instance: ckt,
-        encryption_key: Fp::from(1337u64),
-        _marker: PhantomData,
+        encryption_key: F::from(1337u64),
     };
 
     let bckt = &circuit.boolean_circuit_instance.ckt;
     let bckt_assn = &circuit.boolean_circuit_instance.assn;
 
-    let mut inst_enable_i_o = vec![Fp::zero(); bckt_assn.wires.len()];
+    let mut inst_enable_i_o = vec![F::zero(); bckt_assn.wires.len()];
     let mut inst_i_o_val = inst_enable_i_o.clone();
 
     bckt.inputs.iter().for_each(|&i| {
-        inst_enable_i_o[i as usize] = Fp::one();
-        inst_i_o_val[i as usize] = Fp::from(bckt_assn.wires[i as usize]);
+        inst_enable_i_o[i as usize] = F::one();
+        inst_i_o_val[i as usize] = F::from(bckt_assn.wires[i as usize]);
     });
     bckt.outputs.iter().for_each(|&o| {
-        inst_enable_i_o[o as usize] = Fp::one();
-        inst_i_o_val[o as usize] = Fp::from(bckt_assn.wires[o as usize]);
+        inst_enable_i_o[o as usize] = F::one();
+        inst_i_o_val[o as usize] = F::from(bckt_assn.wires[o as usize]);
     });
 
     let instance = vec![inst_enable_i_o, inst_i_o_val];
@@ -356,7 +364,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
         },
         SerdeFormat,
     };
-    use halo2curves::bn256::{Bn256, Fr, G1Affine};
+    use halo2curves::bn256::{Bn256, G1Affine};
     use rand_core::OsRng;
 
     use std::time::Instant;
@@ -366,25 +374,24 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     const G: usize = 1 << (k - 1);
     const W: usize = 1 << (k - 1);
 
-    let circuit = ZktSimCircuit::<Fr, G, W> {
+    let circuit = ZktSimCircuit::<G, W> {
         boolean_circuit_instance: ckt,
-        encryption_key: Fr::from(1337u64),
-        _marker: PhantomData,
+        encryption_key: F::from(1337u64),
     };
 
     let bckt = &circuit.boolean_circuit_instance.ckt;
     let bckt_assn = &circuit.boolean_circuit_instance.assn;
 
-    let mut inst_enable_i_o = vec![Fr::zero(); bckt_assn.wires.len()];
+    let mut inst_enable_i_o = vec![F::zero(); bckt_assn.wires.len()];
     let mut inst_i_o_val = inst_enable_i_o.clone();
 
     bckt.inputs.iter().for_each(|&i| {
-        inst_enable_i_o[i as usize] = Fr::one();
-        inst_i_o_val[i as usize] = Fr::from(bckt_assn.wires[i as usize]);
+        inst_enable_i_o[i as usize] = F::one();
+        inst_i_o_val[i as usize] = F::from(bckt_assn.wires[i as usize]);
     });
     bckt.outputs.iter().for_each(|&o| {
-        inst_enable_i_o[o as usize] = Fr::one();
-        inst_i_o_val[o as usize] = Fr::from(bckt_assn.wires[o as usize]);
+        inst_enable_i_o[o as usize] = F::one();
+        inst_i_o_val[o as usize] = F::from(bckt_assn.wires[o as usize]);
     });
 
     println!("Creating parameters...");
@@ -394,7 +401,7 @@ pub fn run_prover_kzg(ckt: BooleanCircuitInstance) {
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
 
-    let instance: &[&[Fr]] = &[&inst_enable_i_o, &inst_i_o_val];
+    let instance: &[&[F]] = &[&inst_enable_i_o, &inst_i_o_val];
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
 
     println!("Generating proof...");

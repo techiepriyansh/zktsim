@@ -104,12 +104,24 @@
 ## Hashing the circuit netlist
 
 * Sample a random key K
-* Hash K using the [LP231Ap](https://github.com/zcash/zcash/issues/2233#issuecomment-291840857) construction with the MiMC block cipher
+* Hash K using the Poseidon gadget
 * Expose public this hashed value of K 
 * Encrypt the circuit netlist with MiMC7 CBC encryption using the key K
 * Expose public the encrypted circuit netlist
 
 **Arithmetization**
+
+* Hashing K
+  
+  * Instantiate Poseidon gadget
+  
+  * Constrain
+    
+    ```
+    // first value of k in the MiMC Key column == message input of the Poseidon gadget
+    ```
+    
+    
 
 * Circuit netlist encryption
   

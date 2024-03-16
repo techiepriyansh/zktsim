@@ -16,14 +16,19 @@ use crate::gadgets::poseidon::{
 
 const WIDTH: usize = 3;
 const RATE: usize = 2;
-const L: usize = 1;
+const L: usize = 2;
 
 #[derive(Debug, Clone)]
-pub(super) struct PoseidonHashConfig {
+pub(super) struct PoseidonBN256FrConfig {
     pow5config: Pow5Config<Fr, WIDTH, RATE>,
 }
 
-impl PoseidonHashConfig {
+pub(super) struct PoseidonBN256FrSynthesisOutput {
+    pub(super) message: AssignedCell<Fr, Fr>,
+    pub(super) output: AssignedCell<Fr, Fr>,
+}
+
+impl PoseidonBN256FrConfig {
     pub(super) fn configure(meta: &mut ConstraintSystem<Fr>) -> Self {
         let state = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
         let partial_sbox = meta.advice_column();
@@ -47,20 +52,27 @@ impl PoseidonHashConfig {
     pub(super) fn synthesize(
         &self,
         mut layouter: impl Layouter<Fr>,
-        message: Fr,
-    ) -> Result<AssignedCell<Fr, Fr>, Error> {
+        msg_val: Fr,
+    ) -> Result<PoseidonBN256FrSynthesisOutput, Error> {
         let chip = Pow5Chip::construct(self.pow5config.clone());
 
-        let message = layouter.assign_region(
-            || "load message for poseidon hash",
+        let mut msg_arr = [Fr::zero(); L];
+        msg_arr[0] = msg_val;
+
+        let message: [AssignedCell<Fr, Fr>; L] = layouter.assign_region(
+            || "load message",
             |mut region| {
-                let message = region.assign_advice(
-                    || "poseidon hash message",
-                    self.pow5config.state[0],
-                    0,
-                    || Value::known(message),
-                );
-                Ok(message.map(|m| [m]).unwrap())
+                let message_word = |i: usize| {
+                    region.assign_advice(
+                        || format!("load message_{}", i),
+                        self.pow5config.state[i],
+                        0,
+                        || Value::known(msg_arr[i]),
+                    )
+                };
+
+                let message: Result<Vec<_>, Error> = (0..L).map(message_word).collect();
+                Ok(message?.try_into().unwrap())
             },
         )?;
 
@@ -69,6 +81,11 @@ impl PoseidonHashConfig {
             layouter.namespace(|| "poseidon init"),
         )?;
 
-        hasher.hash(layouter.namespace(|| "do poseidon hash"), message)
+        let output = hasher.hash(layouter.namespace(|| "do poseidon hash"), message.clone())?;
+
+        Ok(PoseidonBN256FrSynthesisOutput {
+            message: message[0].clone(),
+            output,
+        })
     }
 }
