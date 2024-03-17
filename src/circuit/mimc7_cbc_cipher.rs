@@ -16,7 +16,7 @@ use super::common::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct Mimc7CbcCipherConfig<F: PrimeField, const N: usize> {
-    pub(super) s: Selector,
+    pub(super) s: Column<Fixed>,
     pub(super) k: Column<Advice>,
     pub(super) iv: Column<Advice>,
     pub(super) x_in: Column<Advice>,
@@ -38,7 +38,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         meta: &mut ConstraintSystem<F>,
         params: Mimc7CbcCipherParams<F>,
     ) -> Self {
-        let s = meta.selector();
+        let s = meta.fixed_column();
         let k = meta.advice_column();
         let iv = meta.advice_column();
         let x: [Column<Advice>; 92] = (0..92)
@@ -53,7 +53,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         meta.enable_equality(x_out);
 
         meta.create_gate("MiMC7 CBC encryption round function", |meta| {
-            let s_ = meta.query_selector(s);
+            let s_ = meta.query_fixed(s, Rotation::cur());
             let k_ = meta.query_advice(k, Rotation::cur());
             let x_ = (0..92)
                 .map(|i| meta.query_advice(x[i], Rotation::cur()))
@@ -80,7 +80,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         });
 
         meta.create_gate("MiMC7 CBC encryption cipher input", |meta| {
-            let s_ = meta.query_selector(s);
+            let s_ = meta.query_fixed(s, Rotation::cur());
             let iv_ = meta.query_advice(iv, Rotation::cur());
             let x_in_ = meta.query_advice(params.x_in, Rotation::cur());
             let x_0_ = meta.query_advice(x[0], Rotation::cur());
@@ -89,7 +89,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         });
 
         meta.create_gate("MiMC7 CBC encryption cipher output", |meta| {
-            let s_ = meta.query_selector(s);
+            let s_ = meta.query_fixed(s, Rotation::cur());
             let k_ = meta.query_advice(k, Rotation::cur());
             let x_91_ = meta.query_advice(x[91], Rotation::cur());
             let x_out_ = meta.query_advice(x_out, Rotation::cur());
@@ -149,7 +149,12 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
             (prev_k_acell, prev_x_out_acell) = layouter.assign_region(
                 || format!("MiMC7 CBC assignment for row {}", row),
                 |mut region| {
-                    self.s.enable(&mut region, 0)?;
+                    region.assign_fixed(
+                        || "MiMC7 selector input encoding",
+                        self.s,
+                        0,
+                        || Value::known(F::ONE),
+                    )?;
 
                     let k_acell = prev_k_acell.clone().map_or(
                         Some(
@@ -212,6 +217,13 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         layouter.assign_region(
             || "MiMC7 CBC assignment zero row",
             |mut region| {
+                region.assign_fixed(
+                    || "MiMC7 selector input encoding",
+                    self.s,
+                    0,
+                    || Value::known(F::ZERO),
+                )?;
+
                 region.assign_advice(
                     || "k",
                     self.k,

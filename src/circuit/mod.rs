@@ -125,7 +125,7 @@ impl<F: PrimeField, const G: usize, const W: usize> ZktSimConfig<F, G, W> {
         });
 
         meta.create_gate("input encoding for circuit netlist encryption", |meta| {
-            let s = meta.query_selector(mcc.s);
+            let s = meta.query_fixed(mcc.s, Rotation::cur());
             let x_in = meta.query_advice(mcc.x_in, Rotation::cur());
 
             let g = meta.query_advice(gio.gate, Rotation::cur());
