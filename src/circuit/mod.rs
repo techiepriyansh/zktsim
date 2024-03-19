@@ -176,6 +176,9 @@ impl<const G: usize, const W: usize> ZktSimConfig<G, W> {
             ]
         });
 
+        let global_constants_column = meta.fixed_column();
+        meta.enable_constant(global_constants_column);
+
         Self {
             gate_io_table: gio,
             wire_assignment_table: wa,

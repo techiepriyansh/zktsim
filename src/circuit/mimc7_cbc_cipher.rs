@@ -183,7 +183,12 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
                                 .copy_advice(|| "iv", &mut region, self.iv, 0)?;
                         }
                         None => {
-                            region.assign_advice(|| "iv", self.iv, 0, || va(iv_val))?;
+                            region.assign_advice_from_constant(
+                                || "iv",
+                                self.iv,
+                                0,
+                                Assigned::from(iv_val),
+                            )?;
                         }
                     };
 
