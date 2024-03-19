@@ -9,7 +9,6 @@ use halo2_proofs::{
 
 use ff::Field;
 use halo2curves::bn256::Fr as F;
-use halo2curves::ff::PrimeField;
 
 use crate::boolean_circuit::BooleanCircuitInstance;
 
@@ -32,6 +31,7 @@ mod mimc7_cbc_cipher;
 use mimc7_cbc_cipher::{Mimc7CbcCipherConfig, Mimc7CbcCipherParams, Mimc7DefaultConstants};
 
 mod poseidon_bn256_fr;
+use poseidon_bn256_fr::{PoseidonBN256FrConfig, PoseidonBN256FrSynthesisOutput};
 
 #[derive(Debug, Clone)]
 struct ZktSimConfig<const G: usize, const W: usize> {
@@ -40,6 +40,7 @@ struct ZktSimConfig<const G: usize, const W: usize> {
     gate_definition_table: GateDefinitionTableConfig<F>,
     expected_io_table: ExpectedIoTableConfig<F>,
     mimc7_cbc_cipher: Mimc7CbcCipherConfig<F, G>,
+    poseidon_bn256_fr: PoseidonBN256FrConfig,
 }
 
 impl<const G: usize, const W: usize> ZktSimConfig<G, W> {
@@ -55,6 +56,7 @@ impl<const G: usize, const W: usize> ZktSimConfig<G, W> {
         let gdef = GateDefinitionTableConfig::configure(meta);
         let eio = ExpectedIoTableConfig::configure(meta, expected_io_table_instance);
         let mcc = Mimc7CbcCipherConfig::<F, G>::configure(meta, mimc7_cbc_cipher_params);
+        let psd = PoseidonBN256FrConfig::configure(meta);
 
         meta.lookup_any("logic gates satisfaction", |meta| {
             let i_e_g = meta.query_fixed(gio.internal_enable_gate, Rotation::cur());
@@ -180,6 +182,7 @@ impl<const G: usize, const W: usize> ZktSimConfig<G, W> {
             gate_definition_table: gdef,
             expected_io_table: eio,
             mimc7_cbc_cipher: mcc,
+            poseidon_bn256_fr: psd,
         }
     }
 }
@@ -293,10 +296,16 @@ impl<const G: usize, const W: usize> Circuit<F> for ZktSimCircuit<G, W> {
             );
         }
 
+        let poseidon_synth_out = config.poseidon_bn256_fr.synthesize(
+            layouter.namespace(|| "Poseidon hash of encryption key"),
+            self.encryption_key,
+        )?;
+
         config.mimc7_cbc_cipher.synthesize(
             layouter.namespace(|| "Circuit netlist encryption"),
             x_in_quarter_vals,
             self.encryption_key,
+            poseidon_synth_out.message.cell(),
         )?;
 
         Ok(())

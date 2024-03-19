@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use halo2_proofs::{
-    circuit::{Layouter, Region, Value},
+    circuit::{AssignedCell, Cell, Layouter, Region, Value},
     plonk::{
         Advice, Assigned, Column, ConstraintSystem, Error,
         Expression::{self, Constant},
@@ -114,6 +114,7 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
         mut layouter: impl Layouter<F>,
         x_in_quarter_vals: Vec<F>,
         k_val: F,
+        k_cell: Cell,
     ) -> Result<(), Error> {
         assert!(x_in_quarter_vals.len() <= N);
         assert!(N % 4 == 0);
@@ -170,6 +171,10 @@ impl<F: PrimeField, const N: usize> Mimc7CbcCipherConfig<F, N> {
                                 .ok()
                         },
                     );
+
+                    if row == 0 {
+                        region.constrain_equal(k_acell.clone().unwrap().0.cell(), k_cell)?;
+                    }
 
                     match prev_x_out_acell.clone() {
                         Some(prev_x_out_acell_val) => {
